@@ -7,7 +7,12 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"strings"
+	"time"
+
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 )
 
 type PageData struct {
@@ -99,11 +104,23 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	err := sentry.Init(sentry.ClientOptions{
+		Dsn:              os.Getenv("SENTRY_DSN"),
+		EnableTracing:    true,
+		TracesSampleRate: 1.0,
+	})
+	if err != nil {
+		log.Fatalf("sentry.Init: %s", err)
+	}
+	defer sentry.Flush(2 * time.Second)
+
+	sentryHandler := sentryhttp.New(sentryhttp.Options{})
+
 	initTemplates()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /", GetHandler)
-	mux.HandleFunc("POST /", PostHandler)
+	mux.Handle("GET /", sentryHandler.Handle(http.HandlerFunc(GetHandler)))
+	mux.Handle("POST /", sentryHandler.Handle(http.HandlerFunc(PostHandler)))
 
 	log.Print("Running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
