@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html
+    lang="en"
+    class="h-full"
+>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <title>Sentry Envelope Formatter</title>
+</head>
+<body class="h-full font-mono p-8 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-50">
+    <div class="h-full max-w-6xl mx-auto">
+        <form method="POST">
+            <textarea
+                class="w-full rounded-md mb-8 px-4 py-2 outline-1 -outline-offset-1 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500"
+                name="envelope"
+                rows="8"
+                placeholder="Paste your envelope here..."
+            >{{.Envelope}}</textarea>
+            {{if .Error}}
+            <div class="error mb-8">
+                <strong>Error:</strong> {{.Error}}
+            </div>
+            {{end}}
+            <button
+                type="submit"
+                class="rounded-md bg-indigo-500 px-4 py-2 font-semibold hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+            >Format</button>
+        </form>
+
+        {{if .HasResult}}
+        <div
+            class="rounded-md mt-8 px-4 py-2 outline-1 whitespace-pre-wrap max-h-[600px] overscroll-contain overflow-y-auto"
+        >{{.FormattedEnvelope}}</div>
+        {{end}}
+    </div>
+</body>
+</html>
