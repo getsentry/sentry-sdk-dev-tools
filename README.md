@@ -1,6 +1,6 @@
 # Sentry Envelope Formatter
 
-A simple Go web application that allows you to paste Sentry envelope data and displays it in a beautified, readable format.
+A web application that allows you to paste Sentry envelope data and displays it in a beautified, readable format.
 
 ## Quick Start
 
@@ -16,7 +16,7 @@ A simple Go web application that allows you to paste Sentry envelope data and di
    Copy your Sentry envelope data and paste it into the text area
 
 4. **Format and view:**
-   Click "Format Envelope" to see the beautified output
+   Click "Format" to see the beautified output
 
 ## Example Usage
 
@@ -29,20 +29,15 @@ Input (raw envelope):
 
 Output (formatted):
 ```
-=== Line 1 ===
 {
   "event_id": "12345",
   "sent_at": "2023-01-01T00:00:00Z",
   "dsn": "https://key@sentry.io/project"
 }
-
-=== Line 2 ===
 {
   "type": "event",
   "content_type": "application/json"
 }
-
-=== Line 3 ===
 {
   "message": "Hello World",
   "level": "info",
