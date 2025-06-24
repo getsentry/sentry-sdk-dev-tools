@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -9,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -22,7 +25,17 @@ type PageData struct {
 	Envelope          string
 }
 
+type ResultData struct {
+	FormattedEnvelope string
+	Error             string
+	HasResult         bool
+	Envelope          string
+	Timestamp         time.Time
+}
+
 var templates *template.Template
+var resultStore = make(map[string]ResultData)
+var resultMutex sync.RWMutex
 
 func formatEnvelope(envelope string) (string, error) {
 	var result strings.Builder
@@ -61,6 +74,44 @@ func formatEnvelope(envelope string) (string, error) {
 	return result.String(), nil
 }
 
+func generateID() string {
+	bytes := make([]byte, 16)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)
+}
+
+func storeResult(data ResultData) string {
+	id := generateID()
+	data.Timestamp = time.Now()
+
+	resultMutex.Lock()
+	resultStore[id] = data
+	resultMutex.Unlock()
+
+	go cleanupOldResults()
+
+	return id
+}
+
+func getResult(id string) (ResultData, bool) {
+	resultMutex.RLock()
+	data, exists := resultStore[id]
+	resultMutex.RUnlock()
+	return data, exists
+}
+
+func cleanupOldResults() {
+	resultMutex.Lock()
+	defer resultMutex.Unlock()
+
+	cutoff := time.Now().Add(-1 * time.Hour)
+	for id, data := range resultStore {
+		if data.Timestamp.Before(cutoff) {
+			delete(resultStore, id)
+		}
+	}
+}
+
 func initTemplates() {
 	var err error
 	templates, err = template.ParseGlob("templates/*.html")
@@ -72,27 +123,14 @@ func initTemplates() {
 func GetHandler(w http.ResponseWriter, r *http.Request) {
 	data := PageData{}
 
-	w.Header().Set("Content-Type", "text/html")
-	if err := templates.ExecuteTemplate(w, "index.html", data); err != nil {
-		http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-func PostHandler(w http.ResponseWriter, r *http.Request) {
-	data := PageData{}
-
-	envelope := r.FormValue("envelope")
-	data.Envelope = envelope // Preserve user input
-	if envelope == "" {
-		data.Error = "Please paste a Sentry envelope"
-	} else {
-		formatted, err := formatEnvelope(envelope)
-		if err != nil {
-			data.Error = err.Error()
-		} else {
-			data.FormattedEnvelope = formatted
-			data.HasResult = true
+	// Check if there's a result ID in the URL parameters
+	resultID := r.URL.Query().Get("result")
+	if resultID != "" {
+		if resultData, exists := getResult(resultID); exists {
+			data.FormattedEnvelope = resultData.FormattedEnvelope
+			data.Error = resultData.Error
+			data.HasResult = resultData.HasResult
+			data.Envelope = resultData.Envelope
 		}
 	}
 
@@ -101,6 +139,28 @@ func PostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func PostHandler(w http.ResponseWriter, r *http.Request) {
+	resultData := ResultData{}
+
+	envelope := r.FormValue("envelope")
+	resultData.Envelope = envelope // Preserve user input
+	if envelope == "" {
+		resultData.Error = "Please paste a Sentry envelope"
+	} else {
+		formatted, err := formatEnvelope(envelope)
+		if err != nil {
+			resultData.Error = err.Error()
+		} else {
+			resultData.FormattedEnvelope = formatted
+			resultData.HasResult = true
+		}
+	}
+
+	// Store the result and redirect to prevent resubmission
+	resultID := storeResult(resultData)
+	http.Redirect(w, r, "/?result="+resultID, http.StatusSeeOther)
 }
 
 func main() {
