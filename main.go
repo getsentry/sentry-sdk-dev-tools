@@ -2,12 +2,14 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	sentryhttp "github.com/getsentry/sentry-go/http"
+	sentryslog "github.com/getsentry/sentry-go/slog"
 )
 
 type PageData struct {
@@ -81,6 +84,8 @@ func generateID() string {
 }
 
 func storeResult(data ResultData) string {
+	slog.Info("Storing result", "data", data)
+
 	id := generateID()
 	data.Timestamp = time.Now()
 
@@ -104,12 +109,17 @@ func cleanupOldResults() {
 	resultMutex.Lock()
 	defer resultMutex.Unlock()
 
+	slog.Info("Cleaning up old results")
+
 	cutoff := time.Now().Add(-1 * time.Hour)
 	for id, data := range resultStore {
 		if data.Timestamp.Before(cutoff) {
 			delete(resultStore, id)
+			slog.Info("Deleted old result", "id", id)
 		}
 	}
+
+	slog.Info("Finished cleaning up old results")
 }
 
 func initTemplates() {
@@ -120,8 +130,25 @@ func initTemplates() {
 	}
 }
 
+func initLogger() {
+	ctx := context.Background()
+	logger := slog.New(sentryslog.Option{
+		EventLevel: []slog.Level{},
+		LogLevel: []slog.Level{
+			slog.LevelDebug,
+			slog.LevelInfo,
+			slog.LevelWarn,
+			slog.LevelError,
+		},
+	}.NewSentryHandler(ctx))
+
+	slog.SetDefault(logger)
+}
+
 func GetHandler(w http.ResponseWriter, r *http.Request) {
 	data := PageData{}
+
+	slog.InfoContext(r.Context(), "GetHandler", "url", r.URL)
 
 	// Check if there's a result ID in the URL parameters
 	resultID := r.URL.Query().Get("result")
@@ -143,6 +170,8 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 
 func PostHandler(w http.ResponseWriter, r *http.Request) {
 	resultData := ResultData{}
+
+	slog.InfoContext(r.Context(), "PostHandler", "form", r.Form)
 
 	envelope := r.FormValue("envelope")
 	resultData.Envelope = envelope // Preserve user input
@@ -168,6 +197,7 @@ func main() {
 		Dsn:              os.Getenv("SENTRY_DSN"),
 		EnableTracing:    true,
 		TracesSampleRate: 1.0,
+		EnableLogs:       true,
 	})
 	if err != nil {
 		log.Fatalf("sentry.Init: %s", err)
@@ -177,6 +207,7 @@ func main() {
 	sentryHandler := sentryhttp.New(sentryhttp.Options{})
 
 	initTemplates()
+	initLogger()
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /", sentryHandler.Handle(http.HandlerFunc(GetHandler)))
