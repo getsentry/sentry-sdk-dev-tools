@@ -31,10 +31,47 @@
         </form>
 
         {{if .HasResult}}
-        <div
-            class="rounded-md mt-8 px-4 py-2 outline-1 whitespace-pre-wrap max-h-[600px] overscroll-contain overflow-y-auto"
-        >{{.FormattedEnvelope}}</div>
+        <div class="mt-8">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-lg font-semibold">Formatted Result:</h3>
+                <button
+                    id="copyButton"
+                    class="rounded-md border border-indigo-500 px-3 py-1 text-indigo-500 font-semibold text-white hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                    onclick="copyToClipboard()"
+                >Copy</button>
+            </div>
+            <div
+                id="formattedContent"
+                class="rounded-md px-4 py-2 outline-1 whitespace-pre-wrap max-h-[600px] overscroll-contain overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+            >{{.FormattedEnvelope}}</div>
+        </div>
         {{end}}
     </div>
+
+    <script>
+        async function copyToClipboard() {
+            const content = document.getElementById('formattedContent').textContent;
+            const button = document.getElementById('copyButton');
+            
+            try {
+                await navigator.clipboard.writeText(content);
+
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+                
+                const originalText = button.textContent;
+                button.textContent = 'Failed to copy!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            }
+        }
+    </script>
 </body>
 </html>
