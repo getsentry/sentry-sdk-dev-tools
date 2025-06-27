@@ -67,7 +67,7 @@ func formatEnvelope(envelope string) (string, error) {
 			return "", fmt.Errorf("failed to format JSON on line %d: %v", lineNum, err)
 		}
 		result.WriteString(string(formatted))
-		result.WriteString("\n\n")
+		result.WriteString("\n")
 	}
 
 	if err := scanner.Err(); err != nil {
